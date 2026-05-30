@@ -24,3 +24,5 @@ class HeartRateController extends Controller
         return response()->json(['message' => 'Data BPM berhasil disimpan!'], 201);
     }
 }
+
+// ini tes saja
