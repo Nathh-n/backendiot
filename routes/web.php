@@ -3,5 +3,5 @@
 use Illuminate\Support\Facades\Route;
 
 Route::get('/', function () {
-    return view('dashboard'); // Mengarahkan ke halaman dashboard
+    return view('dashboard.index'); // Mengarahkan ke halaman dashboard
 });
