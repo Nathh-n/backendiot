@@ -26,3 +26,12 @@ Route::post('/gps', [GpsDataController::class, 'store']);
 
 // Pintu Keluar (Untuk mengirim koordinat peta ke Dashboard)
 Route::get('/latest-gps', [GpsDataController::class, 'latest']);
+
+// Mengambil 10 riwayat terakhir untuk tabel
+Route::get('/history-bpm', function() {
+    return App\Models\HeartRate::latest()->take(10)->get();
+});
+
+Route::get('/history-gps', function() {
+    return App\Models\GpsData::latest()->take(10)->get();
+});
