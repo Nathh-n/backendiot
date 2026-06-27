@@ -1,6 +1,6 @@
 <aside class="sidebar">
     <div class="brand">
-        <svg class="icon" viewBox="0 0 24 24" style="width:28px; height:28px; stroke:var(--primary); stroke-width:3"><circle cx="12" cy="12" r="10"/><path d="M12 8v4l3 3"/></svg>
+        <img src="{{ asset('images/logo-syncro.svg') }}" alt="Logo SyncRo" style="width: 38px; height: auto;">
         SyncRo
     </div>
     
