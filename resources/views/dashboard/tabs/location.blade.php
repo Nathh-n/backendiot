@@ -79,7 +79,7 @@
         <div class="cal-days" id="calendar-days-loc">
         </div>
 
-        <button class="btn-action">Unduh Log Rute</button>
+        <a href="{{ url('/export/location') }}" class="btn-action" style="display: block; text-align: center; text-decoration: none; box-sizing: border-box;">Unduh Log Rute</a>
     </div>
 
     <h3 class="timeline-header">Rute Perjalanan Terakhir</h3>

@@ -94,7 +94,7 @@
             </div>
         </div>
 
-        <button class="btn-action">Unduh Laporan Medis</button>
+        <a href="{{ url('/export/heart-rate') }}" class="btn-action" style="display: block; text-align: center; text-decoration: none; box-sizing: border-box;">Unduh Laporan Medis</a>
     </div>
 
     <h3 class="timeline-header">Riwayat Terbaru</h3>

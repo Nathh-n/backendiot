@@ -40,6 +40,43 @@ class HeartRateController extends Controller
             'message' => 'Data BPM berhasil disimpan!'
         ], 201);
     }
+
+    public function exportHeartRate()
+    {
+        // Menggunakan model HeartRate
+        $dataJantung = \App\Models\HeartRate::orderBy('created_at', 'desc')->get();
+
+        $fileName = 'Laporan_Jantung_SyncRo_' . date('Y-m-d') . '.csv';
+
+        $headers = [
+            "Content-type"        => "text/csv",
+            "Content-Disposition" => "attachment; filename=$fileName",
+            "Pragma"              => "no-cache",
+            "Cache-Control"       => "must-revalidate, post-check=0, pre-check=0",
+            "Expires"             => "0"
+        ];
+
+        $callback = function() use($dataJantung) {
+            $file = fopen('php://output', 'w');
+            fputcsv($file, ['Tanggal & Waktu', 'BPM (Detak Jantung)', 'Status']);
+
+            foreach ($dataJantung as $row) {
+                $status = 'Normal';
+                if ($row->bpm < 60 || $row->bpm > 100) {
+                    $status = 'Tidak Normal (Peringatan)';
+                }
+
+                fputcsv($file, [
+                    $row->created_at->format('Y-m-d H:i:s'),
+                    $row->bpm,
+                    $status
+                ]);
+            }
+            fclose($file);
+        };
+
+        return response()->stream($callback, 200, $headers);
+    }
 }
 
 // ini tes saja coba lagi
