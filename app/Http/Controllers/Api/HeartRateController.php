@@ -46,7 +46,8 @@ class HeartRateController extends Controller
         // Menggunakan model HeartRate
         $dataJantung = \App\Models\HeartRate::orderBy('created_at', 'desc')->get();
 
-        $fileName = 'Laporan_Jantung_SyncRo_' . date('Y-m-d') . '.csv';
+        // Menambahkan format Jam-Menit agar nama file lebih unik
+        $fileName = 'Laporan_Jantung_SyncRo_' . date('Y-m-d_H-i') . '.csv';
 
         $headers = [
             "Content-type"        => "text/csv",
@@ -58,16 +59,22 @@ class HeartRateController extends Controller
 
         $callback = function() use($dataJantung) {
             $file = fopen('php://output', 'w');
-            fputcsv($file, ['Tanggal & Waktu', 'BPM (Detak Jantung)', 'Status']);
+            
+            // Kolom Tanggal dan Waktu dipisah agar rapi
+            fputcsv($file, ['Tanggal', 'Waktu', 'BPM (Detak Jantung)', 'Status Medis']);
 
             foreach ($dataJantung as $row) {
+                // Logika status disesuaikan dengan indikator di dashboard
                 $status = 'Normal';
-                if ($row->bpm < 60 || $row->bpm > 100) {
-                    $status = 'Tidak Normal (Peringatan)';
+                if ($row->bpm > 100) {
+                    $status = 'Tinggi (Di Atas Normal)';
+                } elseif ($row->bpm < 60) {
+                    $status = 'Rendah (Di Bawah Normal)';
                 }
 
                 fputcsv($file, [
-                    $row->created_at->format('Y-m-d H:i:s'),
+                    $row->created_at->format('Y-m-d'), // Hanya Tanggal
+                    $row->created_at->format('H:i:s'), // Hanya Jam
                     $row->bpm,
                     $status
                 ]);

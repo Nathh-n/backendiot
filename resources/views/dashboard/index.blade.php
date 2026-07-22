@@ -15,6 +15,9 @@
 @endsection
 
 @push('scripts')
+<!-- IMPORT CHART.JS DARI CDN -->
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+
 <script>
     // ================= 1. FUNGSI PINDAH HALAMAN (SPA) =================
     function switchPage(pageId, element) {
@@ -35,46 +38,76 @@
             document.querySelectorAll('.nav-item')[Array.from(element.parentNode.children).indexOf(element)].classList.add('active');
         }
 
+        // Fix resize issue untuk Peta dan Grafik saat pindah tab
         setTimeout(() => { 
             if(pageId === 'home') liveMap.invalidateSize(); 
             if(pageId === 'location') histMap.invalidateSize(); 
+            if(pageId === 'heart' && histBpmChart) histBpmChart.resize();
         }, 100);
     }
 
     // ================= 2. PENGATURAN PETA LEAFLET =================
     const defaultCoord = [-7.684519, 109.622424]; 
+    // MENGUBAH URL TILE LAYER AGAR LEBIH KONTRAS DAN JELAS (Menggunakan OpenStreetMap standar)
+    const tileUrl = 'https://tile.openstreetmap.org/{z}/{x}/{y}.png';
+
     const liveMap = L.map('live-map', {zoomControl: false}).setView(defaultCoord, 16);
-    L.tileLayer('https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png', { maxZoom: 19 }).addTo(liveMap); 
+    L.tileLayer(tileUrl, { maxZoom: 19, attribution: '© OpenStreetMap' }).addTo(liveMap); 
     let liveMarker = L.marker(defaultCoord).addTo(liveMap);
 
     const histMap = L.map('history-map', {zoomControl: true}).setView(defaultCoord, 16);
-    L.tileLayer('https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png', { maxZoom: 19 }).addTo(histMap);
-    let routeLine = L.polyline([], {color: '#68A9CF', weight: 4, dashArray: '10, 10'}).addTo(histMap); 
+    L.tileLayer(tileUrl, { maxZoom: 19, attribution: '© OpenStreetMap' }).addTo(histMap);
+    let routeLine = L.polyline([], {color: '#e11d48', weight: 5, dashArray: '10, 10'}).addTo(histMap); // Warna garis diganti merah agar kontras dgn map
     let routeMarkers = L.layerGroup().addTo(histMap);
+
+    // Fungsi klik dari timeline untuk zoom peta
+    window.focusMap = function(lat, lng) {
+        histMap.flyTo([lat, lng], 18, { animate: true, duration: 1.5 });
+    };
 
     let lastLat = null; let lastLng = null;
     let totalBpm = 0; let countBpm = 0;
 
-    // ================= 3. LOGIKA KALENDER INTERAKTIF =================
-    let currentDate = new Date(); // Menyimpan tanggal yang sedang dipilih
+    // ================= 3. INISIALISASI CHART.JS (GRAFIK) =================
+    
+    // Grafik A: Mini Live Chart di Beranda
+    const ctxLive = document.getElementById('liveBpmChart');
+    let liveBpmChart = null;
+    if(ctxLive) {
+        liveBpmChart = new Chart(ctxLive, {
+            type: 'line',
+            data: { labels: [], datasets: [{ label: 'BPM', data: [], borderColor: '#f43f5e', borderWidth: 2, tension: 0.4, pointRadius: 0 }] },
+            options: { responsive: true, maintainAspectRatio: false, plugins: { legend: {display:false}, tooltip: {enabled: false} }, scales: { x: {display:false}, y: {display:false, min: 40, max: 140} }, animation: { duration: 0 } }
+        });
+    }
+
+    // Grafik B: History Chart di Halaman Jantung
+    const ctxHist = document.getElementById('historyBpmChart');
+    let histBpmChart = null;
+    if(ctxHist) {
+        histBpmChart = new Chart(ctxHist, {
+            type: 'line',
+            data: { labels: [], datasets: [{ label: 'Detak Jantung (BPM)', data: [], borderColor: '#3b82f6', backgroundColor: 'rgba(59, 130, 246, 0.1)', borderWidth: 2, tension: 0.3, fill: true }] },
+            options: { responsive: true, maintainAspectRatio: false, plugins: { legend: {display:false} }, scales: { y: { suggestedMin: 50, suggestedMax: 120 } } }
+        });
+    }
+
+    // ================= 4. LOGIKA KALENDER INTERAKTIF =================
+    let currentDate = new Date(); 
     const monthNames = ["Januari", "Februari", "Maret", "April", "Mei", "Juni", "Juli", "Agustus", "September", "Oktober", "November", "Desember"];
     const dayNames = ["Min", "Sen", "Sel", "Rab", "Kam", "Jum", "Sab"];
 
-    // Fungsi menggambar ulang angka-angka di kalender
     function renderCalendar() {
         let monthText = `${monthNames[currentDate.getMonth()]} ${currentDate.getFullYear()}`;
         if(document.getElementById('current-month')) document.getElementById('current-month').innerText = monthText;
         if(document.getElementById('current-month-loc')) document.getElementById('current-month-loc').innerText = monthText;
 
         let html = '';
-        // Generate 5 hari (2 hari sebelum, Hari-H, 2 hari sesudah)
         for(let i = -2; i <= 2; i++) {
             let d = new Date(currentDate);
             d.setDate(currentDate.getDate() + i);
 
-            let isActive = (i === 0) ? 'active' : ''; // Hari yang diklik posisinya selalu di tengah
-            
-            // Format YYYY-MM-DD (menghindari zona waktu bergeser)
+            let isActive = (i === 0) ? 'active' : ''; 
             let dateString = new Date(d.getTime() - (d.getTimezoneOffset() * 60000)).toISOString().split('T')[0]; 
 
             html += `
@@ -88,25 +121,21 @@
         if(document.getElementById('calendar-days-loc')) document.getElementById('calendar-days-loc').innerHTML = html;
     }
 
-    // Fungsi yang dipanggil saat angka kalender diklik
     window.changeDate = function(dateString) {
         currentDate = new Date(dateString);
         renderCalendar(); 
         
-        // Update Teks Judul Riwayat
         let options = { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' };
         let formattedStr = currentDate.toLocaleDateString('id-ID', options);
-        document.querySelectorAll('.timeline-header').forEach(el => el.innerText = "Riwayat: " + formattedStr);
+        document.querySelectorAll('.timeline-header').forEach(el => {
+            if(el.innerText.includes('Riwayat')) el.innerText = "Riwayat: " + formattedStr;
+        });
 
-        // Panggil data dari database untuk tanggal yang baru diklik
         fetchHistoryData(dateString);
     }
 
-    // ================= 4. FUNGSI AMBIL DATA DARI DATABASE =================
-    
-    // Fungsi khusus riwayat (Bisa difilter berdasarkan tanggal kalender)
+    // ================= 5. FUNGSI AMBIL DATA DARI DATABASE =================
     function fetchHistoryData(dateFilter = '') {
-        // Javascript menambahkan query "?date=YYYY-MM-DD" ke URL API Laravelmu
         let urlBpm = '/api/history-bpm' + (dateFilter ? '?date=' + dateFilter : '');
         let urlGps = '/api/history-gps' + (dateFilter ? '?date=' + dateFilter : '');
 
@@ -117,7 +146,16 @@
             
             if(data.length === 0) {
                 container.innerHTML = '<p style="text-align:center; color:var(--text-muted); padding:30px;">Tidak ada rekam medis pada tanggal ini.</p>';
+                if(histBpmChart) { histBpmChart.data.labels = []; histBpmChart.data.datasets[0].data = []; histBpmChart.update(); }
                 return;
+            }
+
+            // UPDATE GRAFIK GARIS HISTORY
+            if(histBpmChart) {
+                let chartData = [...data].reverse(); // Balik data untuk urutan waktu dari kiri ke kanan di grafik
+                histBpmChart.data.labels = chartData.map(item => new Date(item.created_at).toLocaleTimeString('id-ID', {hour: '2-digit', minute:'2-digit'}));
+                histBpmChart.data.datasets[0].data = chartData.map(item => item.bpm);
+                histBpmChart.update();
             }
 
             container.innerHTML = ''; 
@@ -126,6 +164,7 @@
                 let bpm = item.bpm;
                 let sClass, nClass, sText, desc;
 
+                // Warna kontras diaktifkan di sini
                 if (bpm > 100) { sClass = 'card-danger'; nClass = 'node-danger'; sText = 'Tinggi'; desc = 'Terdeteksi detak jantung di atas normal.'; } 
                 else if (bpm < 60) { sClass = 'card-warning'; nClass = 'node-warning'; sText = 'Rendah'; desc = 'Detak jantung lambat / di bawah normal.'; } 
                 else { sClass = 'card-success'; nClass = 'node-success'; sText = 'Normal'; desc = 'Kondisi pasien stabil.'; }
@@ -162,7 +201,7 @@
             routeLine.setLatLngs(latlngs);
             routeMarkers.clearLayers();
             L.circleMarker(latlngs[0], {color: '#05CD99', radius: 6, fillOpacity: 1}).addTo(routeMarkers).bindPopup("Titik Awal");
-            L.circleMarker(latlngs[latlngs.length - 1], {color: '#68A9CF', radius: 8, fillOpacity: 1}).addTo(routeMarkers).bindPopup("Posisi Terakhir");
+            L.circleMarker(latlngs[latlngs.length - 1], {color: '#3b82f6', radius: 8, fillOpacity: 1}).addTo(routeMarkers).bindPopup("Posisi Terakhir");
             histMap.fitBounds(routeLine.getBounds(), {padding: [30, 30]});
             
             container.innerHTML = '';
@@ -173,8 +212,9 @@
                 let bg = isLatest ? "var(--danger-light)" : "var(--primary-light)";
                 let color = isLatest ? "var(--danger)" : "var(--primary)";
 
+                // Menambahkan onclick untuk menggeser peta
                 container.innerHTML += `
-                <div class="loc-item">
+                <div class="loc-item" onclick="focusMap(${item.latitude}, ${item.longitude})">
                     <div class="loc-icon-wrap" style="background: ${bg}; color: ${color};">
                         <svg class="icon" viewBox="0 0 24 24" style="width:20px;height:20px;"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"/><circle cx="12" cy="10" r="3"/></svg>
                     </div>
@@ -188,13 +228,10 @@
         }).catch(err => console.log("Gagal memuat histori GPS"));
     }
 
-    // Eksekusi Render Pertama Kali Saat Web Dibuka
     renderCalendar();
     fetchHistoryData(currentDate.toISOString().split('T')[0]);
 
-    // ================= 5. INTERVAL UPDATE (REALTIME) =================
-    
-    // Interval 1: Update Live Beranda (Setiap 2 detik)
+    // ================= 6. INTERVAL UPDATE (REALTIME) =================
     setInterval(function() {
         const nowString = new Date().toLocaleTimeString('id-ID', { hour12: false });
         document.getElementById('last-update').innerText = nowString;
@@ -203,19 +240,34 @@
             const bpmDisplay = document.getElementById('bpm-display');
             const statusText = document.getElementById('bpm-status');
             const avgDisplay = document.getElementById('bpm-avg');
+            
             if(data && data.bpm) {
-                if((new Date().getTime() - new Date(data.created_at).getTime()) < 15000) {
-                    if(bpmDisplay) { bpmDisplay.innerHTML = `${data.bpm}`; bpmDisplay.style.color = 'var(--text-dark)'; }
-                    if(statusText) { statusText.innerText = "Realtime Aktif"; statusText.style.color = 'var(--success)'; }
+                let selisihWaktu = new Date().getTime() - new Date(data.created_at).getTime();
+                
+                if(selisihWaktu < 120000) {
+                    if(bpmDisplay) { bpmDisplay.innerHTML = `${data.bpm}`; bpmDisplay.style.color = 'var(--danger)'; }
+                    if(statusText) { statusText.innerText = "Aktif Merekam"; statusText.style.color = 'var(--success)'; }
+                    
                     totalBpm += parseInt(data.bpm); countBpm++;
                     if(avgDisplay) avgDisplay.innerHTML = Math.round(totalBpm/countBpm);
+
+                    // UPDATE MINI CHART DI BERANDA
+                    if(liveBpmChart) {
+                        liveBpmChart.data.labels.push('');
+                        liveBpmChart.data.datasets[0].data.push(data.bpm);
+                        if(liveBpmChart.data.labels.length > 20) { // Batasi hanya 20 titik di grafik kecil
+                            liveBpmChart.data.labels.shift();
+                            liveBpmChart.data.datasets[0].data.shift();
+                        }
+                        liveBpmChart.update();
+                    }
                 } else {
                     if(bpmDisplay) { bpmDisplay.innerHTML = `--`; bpmDisplay.style.color = 'var(--text-muted)'; }
                     if(statusText) { statusText.innerText = "OFF / Terputus"; statusText.style.color = 'var(--danger)'; }
                 }
             }
         });
-
+        
         fetch('/api/latest-gps').then(res => res.json()).then(data => {
             const gpsStatus = document.getElementById('gps-status');
             if(data && data.latitude && data.longitude) {
@@ -233,9 +285,7 @@
         });
     }, 2000); 
 
-    // Interval 2: Refresh Linimasa Riwayat (Tiap 5 detik)
     setInterval(function() {
-        // HANYA refresh riwayat jika kalender sedang berada di hari ini
         let todayStr = new Date().toISOString().split('T')[0];
         let selectedStr = currentDate.toISOString().split('T')[0];
         if(todayStr === selectedStr) {
